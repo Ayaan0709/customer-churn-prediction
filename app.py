@@ -1,19 +1,14 @@
 import streamlit as st
 import pandas as pd
-import xgboost as xgb
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
 
-# Load the XGBoost model
-@st.cache_resource
-def load_xgboost_model():
-    try:
-        model = xgb.XGBClassifier()
-        model.load_model("churn_model.json")
-        return model
-    except Exception as e:
-        st.error(f"Error loading XGBoost model: {e}")
-        st.stop()
+# Try to import xgboost with error handling
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+    st.error("XGBoost is not available. Please check the requirements.txt file.")
 
 # Create encoders (since we don't have the saved ones)
 @st.cache_data
@@ -44,12 +39,35 @@ def create_encoders():
     
     return encoders
 
+# Load the XGBoost model with error handling
+@st.cache_resource
+def load_xgboost_model():
+    if not XGBOOST_AVAILABLE:
+        return None
+        
+    try:
+        model = xgb.XGBClassifier()
+        model.load_model("churn_model.json")
+        return model
+    except FileNotFoundError:
+        st.error("Model file 'churn_model.json' not found. Please make sure it's uploaded to your repository.")
+        return None
+    except Exception as e:
+        st.error(f"Error loading XGBoost model: {e}")
+        return None
+
 # Load model and encoders
 model = load_xgboost_model()
 encoders = create_encoders()
 
 st.title("🔄 Customer Churn Prediction App")
 st.markdown("Enter customer details below and click **Predict Churn** to know if the customer is likely to leave.")
+
+# Show system status
+if XGBOOST_AVAILABLE and model is not None:
+    st.success("✅ Model loaded successfully!")
+else:
+    st.warning("⚠️ There are some issues with the model setup.")
 
 # Create two columns for better layout
 col1, col2 = st.columns(2)
@@ -92,65 +110,70 @@ with col2:
 
 # Prediction button
 if st.button("🔮 Predict Churn", type="primary"):
-    try:
-        # Create input data
-        input_data = {
-            'gender': encoders['gender'][gender],
-            'SeniorCitizen': senior,
-            'Partner': encoders['Partner'][partner],
-            'Dependents': encoders['Dependents'][dependents],
-            'tenure': tenure,
-            'PhoneService': encoders['PhoneService'][phone],
-            'MultipleLines': encoders['MultipleLines'][multiple_lines],
-            'InternetService': encoders['InternetService'][internet],
-            'OnlineSecurity': encoders['OnlineSecurity'][online_security],
-            'OnlineBackup': encoders['OnlineBackup'][online_backup],
-            'DeviceProtection': encoders['DeviceProtection'][device_protection],
-            'TechSupport': encoders['TechSupport'][tech_support],
-            'StreamingTV': encoders['StreamingTV'][streaming_tv],
-            'StreamingMovies': encoders['StreamingMovies'][streaming_movies],
-            'Contract': encoders['Contract'][contract],
-            'PaperlessBilling': encoders['PaperlessBilling'][paperless],
-            'PaymentMethod': encoders['PaymentMethod'][payment_method],
-            'MonthlyCharges': monthly_charges,
-            'TotalCharges': total_charges
-        }
-        
-        # Convert to DataFrame with the correct column order
-        feature_order = [
-            'gender', 'SeniorCitizen', 'Partner', 'Dependents', 'tenure',
-            'PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity',
-            'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV',
-            'StreamingMovies', 'Contract', 'PaperlessBilling', 'PaymentMethod',
-            'MonthlyCharges', 'TotalCharges'
-        ]
-        
-        input_df = pd.DataFrame([input_data])
-        input_df = input_df[feature_order]  # Ensure correct column order
-        
-        # Make prediction
-        prediction = model.predict(input_df)
-        prediction_proba = model.predict_proba(input_df)
-        
-        # Display results
-        st.markdown("---")
-        if prediction[0] == 1:
-            st.error("⚠️ **HIGH RISK**: This customer is likely to churn!")
-            churn_prob = prediction_proba[0][1] * 100
-            st.write(f"**Churn Probability**: {churn_prob:.1f}%")
-        else:
-            st.success("✅ **LOW RISK**: This customer is likely to stay!")
-            stay_prob = prediction_proba[0][0] * 100
-            st.write(f"**Retention Probability**: {stay_prob:.1f}%")
-        
-        # Show probability breakdown
-        with st.expander("View Probability Details"):
-            st.write(f"**Probability of Staying**: {prediction_proba[0][0]:.3f}")
-            st.write(f"**Probability of Churning**: {prediction_proba[0][1]:.3f}")
+    if not XGBOOST_AVAILABLE:
+        st.error("❌ XGBoost is not available. Please check your requirements.txt file.")
+    elif model is None:
+        st.error("❌ Model could not be loaded. Please check your model file.")
+    else:
+        try:
+            # Create input data
+            input_data = {
+                'gender': encoders['gender'][gender],
+                'SeniorCitizen': senior,
+                'Partner': encoders['Partner'][partner],
+                'Dependents': encoders['Dependents'][dependents],
+                'tenure': tenure,
+                'PhoneService': encoders['PhoneService'][phone],
+                'MultipleLines': encoders['MultipleLines'][multiple_lines],
+                'InternetService': encoders['InternetService'][internet],
+                'OnlineSecurity': encoders['OnlineSecurity'][online_security],
+                'OnlineBackup': encoders['OnlineBackup'][online_backup],
+                'DeviceProtection': encoders['DeviceProtection'][device_protection],
+                'TechSupport': encoders['TechSupport'][tech_support],
+                'StreamingTV': encoders['StreamingTV'][streaming_tv],
+                'StreamingMovies': encoders['StreamingMovies'][streaming_movies],
+                'Contract': encoders['Contract'][contract],
+                'PaperlessBilling': encoders['PaperlessBilling'][paperless],
+                'PaymentMethod': encoders['PaymentMethod'][payment_method],
+                'MonthlyCharges': monthly_charges,
+                'TotalCharges': total_charges
+            }
             
-    except Exception as e:
-        st.error(f"Prediction failed: {str(e)}")
-        st.write("Please check your input values and try again.")
+            # Convert to DataFrame with the correct column order
+            feature_order = [
+                'gender', 'SeniorCitizen', 'Partner', 'Dependents', 'tenure',
+                'PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity',
+                'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV',
+                'StreamingMovies', 'Contract', 'PaperlessBilling', 'PaymentMethod',
+                'MonthlyCharges', 'TotalCharges'
+            ]
+            
+            input_df = pd.DataFrame([input_data])
+            input_df = input_df[feature_order]  # Ensure correct column order
+            
+            # Make prediction
+            prediction = model.predict(input_df)
+            prediction_proba = model.predict_proba(input_df)
+            
+            # Display results
+            st.markdown("---")
+            if prediction[0] == 1:
+                st.error("⚠️ **HIGH RISK**: This customer is likely to churn!")
+                churn_prob = prediction_proba[0][1] * 100
+                st.write(f"**Churn Probability**: {churn_prob:.1f}%")
+            else:
+                st.success("✅ **LOW RISK**: This customer is likely to stay!")
+                stay_prob = prediction_proba[0][0] * 100
+                st.write(f"**Retention Probability**: {stay_prob:.1f}%")
+            
+            # Show probability breakdown
+            with st.expander("View Probability Details"):
+                st.write(f"**Probability of Staying**: {prediction_proba[0][0]:.3f}")
+                st.write(f"**Probability of Churning**: {prediction_proba[0][1]:.3f}")
+                
+        except Exception as e:
+            st.error(f"❌ Prediction failed: {str(e)}")
+            st.write("Please check your input values and try again.")
 
 # Add some helpful information
 with st.expander("ℹ️ How to use this app"):
@@ -167,3 +190,10 @@ with st.expander("📊 Model Information"):
     - **Features Used**: 19 customer attributes
     - **Training Data**: Telecommunications customer data with SMOTE balancing
     """)
+
+# Debug information (you can remove this later)
+with st.expander("🔧 Debug Information"):
+    st.write(f"XGBoost Available: {XGBOOST_AVAILABLE}")
+    st.write(f"Model Loaded: {model is not None}")
+    if XGBOOST_AVAILABLE:
+        st.write(f"XGBoost Version: {xgb.__version__}")
